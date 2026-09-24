@@ -25,7 +25,6 @@ INPUT_DIR = "/storage/emulated/0/links"
 OUTPUT_FILE = "/storage/emulated/0/links/output.txt"
 ERROR_LOG = "/storage/emulated/0/links/singbox_errors.log"
 MAX_DELAY_MS = 2000
-WORKERS = 24   # 16-32 обычно нормально для телефона
 
 TG_TEST_HOST = "149.154.167.99"
 TG_TEST_PORT = 443
@@ -40,7 +39,6 @@ console = Console()
 
 
 def notify_user(title: str, message: str):
-    """Отправка Toast и системного уведомления в Android."""
     try:
         subprocess.run(["termux-toast", f"{title}: {message}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
@@ -361,7 +359,6 @@ def test_one(index, total, link):
 
 
 def make_layout():
-    """Создание макета интерфейса."""
     layout = Layout()
     layout.split_column(
         Layout(name="header", size=7),
@@ -371,7 +368,6 @@ def make_layout():
 
 
 def format_elapsed(seconds: float) -> str:
-    """Форматирование секунд в ММ:СС или ЧЧ:ММ:СС."""
     m, s = divmod(int(seconds), 60)
     h, m = divmod(m, 60)
     if h > 0:
@@ -407,6 +403,19 @@ def main():
         except ValueError:
             print("[-] Ошибка: введите корректное число.")
 
+    while True:
+        try:
+            workers_input = input("[?] Сколько потоков использовать? (1-64, Enter = 24): ").strip()
+            if not workers_input:
+                workers_count = 24
+                break
+            workers_count = int(workers_input)
+            if 1 <= workers_count <= 64:
+                break
+            print("[-] Пожалуйста, введите число потоков от 1 до 64.")
+        except ValueError:
+            print("[-] Ошибка: введите корректное число.")
+
     links = all_links[:count_to_check]
     total = len(links)
 
@@ -434,7 +443,7 @@ def main():
         if not finished:
             title = "[bold cyan]VPN Checker Status[/bold cyan]"
             border_style = "cyan"
-            info_text = f"Всего: [bold]{total}[/bold] | Сохранено: [bold green]{saved_count}[/bold green] | Прошло: [bold yellow]{elapsed_str}[/bold yellow] | Потоков: [bold]{WORKERS}[/bold]"
+            info_text = f"Всего: [bold]{total}[/bold] | Сохранено: [bold green]{saved_count}[/bold green] | Прошло: [bold yellow]{elapsed_str}[/bold yellow] | Потоков: [bold]{workers_count}[/bold]"
             
             header_group = Group(
                 Text.from_markup(info_text, justify="center"),
@@ -466,6 +475,7 @@ def main():
                 f"Всего проверено:    [bold white]{total}[/bold white]\n"
                 f"Сохранено рабочих:  [bold green]{saved_count}[/bold green]\n"
                 f"Время работы:       [bold yellow]{elapsed_str}[/bold yellow]\n"
+                f"Использовано потоков: [bold yellow]{workers_count}[/bold yellow]\n"
                 f"Путь к файлу:       [bold dim]{OUTPUT_FILE}[/bold dim]\n"
                 f"─────────────────────────────────\n\n"
                 f"[bold white on blue] Нажмите ENTER для закрытия [/bold white on blue]"
@@ -481,7 +491,7 @@ def main():
 
     try:
         with Live(layout, refresh_per_second=10, screen=True):
-            with ThreadPoolExecutor(max_workers=WORKERS) as ex:
+            with ThreadPoolExecutor(max_workers=workers_count) as ex:
                 futures = [ex.submit(test_one, i + 1, total, link) for i, link in enumerate(links)]
                 for f in as_completed(futures):
                     idx, ok, delay, reason, link = f.result()
